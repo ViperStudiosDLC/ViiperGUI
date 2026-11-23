@@ -7,7 +7,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local AUTHORIZED_USER_IDS = {
-    [0] = true, -- REPLACE 0 with your numeric Roblox UserId
+    -- Add additional permitted numeric UserIds here, e.g. [123456789] = true,
 }
 
 local remote = ReplicatedStorage:FindFirstChild("VIPER_AdminRemote")
@@ -18,9 +18,26 @@ if not remote then
 end
 
 local states = {}
+local lastRemoteCall = {}
 
 local function authorized(player)
-    return AUTHORIZED_USER_IDS[player.UserId] == true
+    if AUTHORIZED_USER_IDS[player.UserId] == true then return true end
+    if game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId then return true end
+    if game.CreatorType == Enum.CreatorType.Group then
+        local ok, rank = pcall(function() return player:GetRankInGroup(game.CreatorId) end)
+        if ok and rank >= 254 then return true end
+    end
+    return false
+end
+
+local check = ReplicatedStorage:FindFirstChild("VIPER_AdminCheck")
+if not check then
+    check = Instance.new("RemoteFunction")
+    check.Name = "VIPER_AdminCheck"
+    check.Parent = ReplicatedStorage
+end
+check.OnServerInvoke = function(player)
+    return authorized(player)
 end
 
 local function getCharacter(player)
@@ -45,6 +62,7 @@ local function setFly(player, enabled)
         velocity.P = 18000
         velocity.Velocity = Vector3.zero
         velocity.Parent = root
+        pcall(function() root:SetNetworkOwner(nil) end)
         local gyro = root:FindFirstChild("VIPER_FlyGyro") or Instance.new("BodyGyro")
         gyro.Name = "VIPER_FlyGyro"
         gyro.MaxTorque = Vector3.new(1e6,1e6,1e6)
@@ -56,6 +74,7 @@ local function setFly(player, enabled)
             local obj = root:FindFirstChild(name)
             if obj then obj:Destroy() end
         end
+        pcall(function() root:SetNetworkOwnershipAuto() end)
     end
 end
 
@@ -84,6 +103,9 @@ end
 
 remote.OnServerEvent:Connect(function(player, action, value)
     if not authorized(player) then return end
+    local now = os.clock()
+    if now - (lastRemoteCall[player] or 0) < 0.045 then return end
+    lastRemoteCall[player] = now
     local state = states[player] or {}
     states[player] = state
 
@@ -104,14 +126,15 @@ remote.OnServerEvent:Connect(function(player, action, value)
         setFly(player, not state.fly)
 
     elseif action == "FlyInput" then
-        if state.fly and typeof(value) == "Vector3" then
+        if state.fly and typeof(value) == "Vector3" and value.Magnitude <= 1.05 then
             local _, _, root = getCharacter(player)
             if root then
                 local velocity = root:FindFirstChild("VIPER_FlyVelocity")
                 if velocity then velocity.Velocity = value * 55 end
+                local horizontal = Vector3.new(value.X, 0, value.Z)
                 local gyro = root:FindFirstChild("VIPER_FlyGyro")
-                if gyro and value.Magnitude > 0.05 then
-                    gyro.CFrame = CFrame.lookAt(root.Position, root.Position + Vector3.new(value.X, 0, value.Z))
+                if gyro and horizontal.Magnitude > 0.05 then
+                    gyro.CFrame = CFrame.lookAt(root.Position, root.Position + horizontal)
                 end
             end
         end
@@ -137,7 +160,10 @@ Players.PlayerAdded:Connect(function(player)
         if state and state.noclip then setNoclip(player, true) end
     end)
 end)
-Players.PlayerRemoving:Connect(cleanup)
+Players.PlayerRemoving:Connect(function(player)
+    cleanup(player)
+    lastRemoteCall[player] = nil
+end)
 
 RunService.Heartbeat:Connect(function()
     for player, state in pairs(states) do
