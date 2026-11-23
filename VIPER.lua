@@ -7,6 +7,7 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
+local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -41,6 +42,15 @@ gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = playerGui
+
+-- Separate top-layer overlay keeps the reticle and FPS visible above the menu.
+local overlay = Instance.new("ScreenGui")
+overlay.Name = "VIPER_Overlay"
+overlay.ResetOnSpawn = false
+overlay.IgnoreGuiInset = true
+overlay.DisplayOrder = 100
+overlay.ZIndexBehavior = Enum.ZIndexBehavior.Global
+overlay.Parent = playerGui
 
 local function new(class, props, parent)
     local o = Instance.new(class)
@@ -130,7 +140,11 @@ end
 local function button(parent,txt,fn)
     local b=tag(new("TextButton",{Size=UDim2.new(1,0,0,36),BackgroundColor3=theme().field,BorderSizePixel=0,
         Text=txt,TextColor3=theme().text,Font=Enum.Font.GothamMedium,TextSize=12,AutoButtonColor=true},parent),"fieldButton")
-    round(b,9); outline(b); b.MouseButton1Click:Connect(fn)
+    round(b,9); outline(b)
+    local base=b.BackgroundColor3
+    b.MouseEnter:Connect(function() TweenService:Create(b,TweenInfo.new(0.12),{BackgroundColor3=theme().panel}):Play() end)
+    b.MouseLeave:Connect(function() TweenService:Create(b,TweenInfo.new(0.12),{BackgroundColor3=theme().field}):Play() end)
+    b.MouseButton1Click:Connect(fn)
     return b
 end
 local function page(name)
@@ -142,11 +156,11 @@ end
 
 -- FPS readout and crosshair: four separated arms with a center dot.
 local fpsHud = tag(new("TextLabel",{AnchorPoint=Vector2.new(1,0),Position=UDim2.new(1,-18,0,18),Size=UDim2.fromOffset(120,28),
-    BackgroundTransparency=1,Text="FPS --",TextSize=14,Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Right,Visible=true},gui),"accentText")
-local crossGroup = new("Frame",{Name="Crosshair",AnchorPoint=Vector2.new(0.5,0.5),Position=UDim2.fromScale(0.5,0.5),Size=UDim2.fromOffset(28,28),BackgroundTransparency=1},gui)
+    BackgroundTransparency=1,Text="FPS --",TextSize=14,Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Right,Visible=true},overlay),"accentText")
+local crossGroup = new("Frame",{Name="Crosshair",AnchorPoint=Vector2.new(0.5,0.5),Position=UDim2.fromScale(0.5,0.5),Size=UDim2.fromOffset(32,32),BackgroundTransparency=1,ZIndex=50},overlay)
 local crossParts={}
 local function crossPart(pos,size)
-    local f=new("Frame",{AnchorPoint=Vector2.new(0.5,0.5),Position=pos,Size=size,BackgroundColor3=accent,BorderSizePixel=0},crossGroup)
+    local f=new("Frame",{AnchorPoint=Vector2.new(0.5,0.5),Position=pos,Size=size,BackgroundColor3=accent,BorderSizePixel=0,ZIndex=51},crossGroup)
     round(f,2); outline(f); table.insert(crossParts,f)
 end
 crossPart(UDim2.fromScale(.5,.12),UDim2.fromOffset(2,7))
@@ -186,26 +200,36 @@ for _,name in ipairs({"Dark","Light","Midnight"}) do
     button(themePanel,name.." theme",function() themeName=name; accent=theme().accent; for _,part in ipairs(crossParts) do part.BackgroundColor3=accent end; applyTheme() end)
 end
 local wallpaperPanel=makePanel(appearance,"WALLPAPER")
-local wallpaperPreview=new("ImageLabel",{Size=UDim2.new(1,0,0,104),BackgroundColor3=theme().field,BorderSizePixel=0,Image="",ScaleType=Enum.ScaleType.Crop},wallpaperPanel)
+local wallpaperPreview=new("ImageLabel",{Size=UDim2.new(1,0,0,118),BackgroundColor3=theme().field,BorderSizePixel=0,Image="",ScaleType=Enum.ScaleType.Crop},wallpaperPanel)
 round(wallpaperPreview,9); tag(wallpaperPreview,"preview")
+local wallpaperInputs={}
 for _,name in ipairs({"Ocean","Fireplace","Snowfall"}) do
-    button(wallpaperPanel,name.." wallpaper",function()
-        wallpaperPreview.Image=WALLPAPERS[name]
-        if WALLPAPERS[name]=="rbxassetid://0" then
-            wallpaperPreview.Image=""
-            wallpaperPreview.BackgroundColor3=theme().field
+    makeLabel(wallpaperPanel,name.." asset ID",18,"mutedText",true,11)
+    local input=tag(new("TextBox",{Size=UDim2.new(1,0,0,34),BackgroundColor3=theme().field,BorderSizePixel=0,
+        Text="",PlaceholderText="Paste Roblox image asset ID",PlaceholderColor3=theme().muted,
+        TextColor3=theme().text,Font=Enum.Font.Gotham,TextSize=12,ClearTextOnFocus=false},wallpaperPanel),"field")
+    round(input,8); outline(input)
+    wallpaperInputs[name]=input
+    button(wallpaperPanel,"Apply "..name.." wallpaper",function()
+        local raw=input.Text:gsub("%s",""):gsub("rbxassetid://","")
+        if raw:match("^%d+$") and raw~="0" then
+            WALLPAPERS[name]="rbxassetid://"..raw
+            wallpaperPreview.Image=WALLPAPERS[name]
+        else
+            input.Text=""
+            input.PlaceholderText="Enter a valid numeric Roblox image ID"
         end
     end)
 end
 button(wallpaperPanel,"Clear wallpaper preview",function() wallpaperPreview.Image="" end)
-makeLabel(wallpaperPanel,"Replace the three rbxassetid://0 values at the top with Roblox image asset IDs.",32,"mutedText")
+makeLabel(wallpaperPanel,"Upload each GIF/image to Roblox first, then paste its image asset ID above. GitHub raw URLs are not accepted by Roblox ImageLabels.",44,"mutedText")
 
 local settings=page("Settings")
 local display=makePanel(settings,"DISPLAY & BACKGROUND")
 button(display,"Toggle FPS display",function() fpsOn=not fpsOn; fpsHud.Visible=fpsOn; fpsBig.Visible=fpsOn end)
 button(display,"Toggle background blur",function()
     blurOn=not blurOn
-    blur.Size=(menuOpen and blurOn) and 14 or 0
+    TweenService:Create(blur,TweenInfo.new(.18),{Size=(menuOpen and blurOn) and 14 or 0}):Play()
 end)
 button(display,"Reset visual settings",function()
     themeName="Dark"; accent=theme().accent; crosshairOn=true; fpsOn=true; blurOn=true; snowOn=false
@@ -214,7 +238,8 @@ button(display,"Reset visual settings",function()
     for _,name in ipairs({"VIPER_Bloom","VIPER_Color"}) do local e=Lighting:FindFirstChild(name); if e then e:Destroy() end end
     applyTheme()
 end)
-local keyPanel=makePanel(settings,"KEYBINDS")
+local keybindsPage=page("Keybinds")
+local keyPanel=makePanel(keybindsPage,"KEYBINDS")
 local bindButtons={}
 local function bindLabel(action)
     local key=binds[action]
@@ -230,7 +255,76 @@ for _,action in ipairs({"Menu","Crosshair","FPS","Blur"}) do
 end
 makeLabel(keyPanel,"Click a bind, then press the key you want to use.",20,"mutedText")
 
-local tabs={"Home","Visuals","Appearance","Settings"}
+local crosshairPage=page("Crosshair")
+local crossSettings=makePanel(crosshairPage,"CROSSHAIR CUSTOMIZATION")
+local crossSize,crossGap,crossThickness=32,7,2
+local function rebuildCrosshair()
+    crossGroup:ClearAllChildren()
+    local function piece(x,y,w,h)
+        local f=new("Frame",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromOffset(x,y),Size=UDim2.fromOffset(w,h),BackgroundColor3=accent,BorderSizePixel=0,ZIndex=51},crossGroup)
+        round(f,2)
+    end
+    local center=crossSize/2
+    piece(center,center-crossGap-crossSize*.16,crossThickness,crossSize*.18)
+    piece(center,center+crossGap+crossSize*.16,crossThickness,crossSize*.18)
+    piece(center-crossGap-crossSize*.16,center,crossSize*.18,crossThickness)
+    piece(center+crossGap+crossSize*.16,center,crossSize*.18,crossThickness)
+    piece(center,center,math.max(3,crossThickness+1),math.max(3,crossThickness+1))
+end
+button(crossSettings,"Increase crosshair size",function() crossSize=math.min(60,crossSize+4); crossGroup.Size=UDim2.fromOffset(crossSize,crossSize); rebuildCrosshair() end)
+button(crossSettings,"Decrease crosshair size",function() crossSize=math.max(16,crossSize-4); crossGroup.Size=UDim2.fromOffset(crossSize,crossSize); rebuildCrosshair() end)
+button(crossSettings,"Increase crosshair thickness",function() crossThickness=math.min(5,crossThickness+1); rebuildCrosshair() end)
+button(crossSettings,"Decrease crosshair thickness",function() crossThickness=math.max(1,crossThickness-1); rebuildCrosshair() end)
+button(crossSettings,"Cycle crosshair color",function() accent=accent==Color3.fromRGB(75,202,244) and Color3.fromRGB(255,190,75) or Color3.fromRGB(75,202,244); rebuildCrosshair(); applyTheme() end)
+button(crossSettings,"Toggle crosshair",function() crosshairOn=not crosshairOn; crossGroup.Visible=crosshairOn end)
+rebuildCrosshair()
+
+local debugPage=page("Debug")
+local debugPanel=makePanel(debugPage,"NPC DEBUG VISUALS")
+makeLabel(debugPanel,"Visual debugging for NPCs and test dummies in your own experience only.",34,"mutedText")
+local npcEspOn,npcChamsOn,npcBoxesOn=false,false,false
+local npcHighlights,npcBoxes={},{}
+local function isNpcModel(model)
+    if not model:IsA("Model") or not model:FindFirstChildOfClass("Humanoid") then return false end
+    return Players:GetPlayerFromCharacter(model)==nil
+end
+local function clearDebugVisuals()
+    for _,v in pairs(npcHighlights) do if v and v.Parent then v:Destroy() end end
+    for _,v in pairs(npcBoxes) do if v and v.Parent then v:Destroy() end end
+    table.clear(npcHighlights); table.clear(npcBoxes)
+end
+local function refreshNpcVisuals()
+    clearDebugVisuals()
+    if not (npcEspOn or npcChamsOn or npcBoxesOn) then return end
+    for _,model in ipairs(workspace:GetDescendants()) do
+        if isNpcModel(model) then
+            if npcEspOn or npcChamsOn then
+                local h=Instance.new("Highlight"); h.Name="VIPER_NPC_Debug"; h.Adornee=model
+                h.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop
+                h.FillColor=Color3.fromRGB(75,202,244); h.OutlineColor=Color3.fromRGB(235,245,255)
+                h.FillTransparency=npcChamsOn and 0.48 or 1; h.OutlineTransparency=npcEspOn and 0 or 1
+                h.Parent=gui; table.insert(npcHighlights,h)
+            end
+            if npcBoxesOn then
+                for _,part in ipairs(model:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        local box=Instance.new("BoxHandleAdornment"); box.Name="VIPER_NPC_HitboxView"
+                        box.Adornee=part; box.AlwaysOnTop=true; box.ZIndex=5; box.Size=part.Size
+                        box.Transparency=.72; box.Color3=Color3.fromRGB(255,185,75); box.Parent=gui
+                        table.insert(npcBoxes,box)
+                    end
+                end
+            end
+        end
+    end
+end
+button(debugPanel,"Toggle NPC ESP outlines",function() npcEspOn=not npcEspOn; refreshNpcVisuals() end)
+button(debugPanel,"Toggle NPC chams",function() npcChamsOn=not npcChamsOn; refreshNpcVisuals() end)
+button(debugPanel,"Toggle NPC hitbox visualization",function() npcBoxesOn=not npcBoxesOn; refreshNpcVisuals() end)
+makeLabel(debugPanel,"These are debug overlays only; they do not change player hitboxes or expose other players through walls.",42,"mutedText")
+
+table.insert(tabs or {},1,"")
+local tabs={"Home","Visuals","Crosshair","Appearance","Keybinds","Debug","Settings"}
 local function selectPage(name)
     for n,p in pairs(pages) do p.Visible=(n==name) end
     for n,b in pairs(nav) do b:SetAttribute("VIPERActive",n==name) end
@@ -267,10 +361,23 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
+local menuTween
 local function setMenu(open)
     menuOpen=open
-    main.Visible=open
-    blur.Size=(open and blurOn) and 14 or 0
+    if menuTween then menuTween:Cancel() end
+    if open then
+        main.Visible=true
+        main.Size=UDim2.new(0.79,0,0.74,0)
+        blur.Size=0
+        menuTween=TweenService:Create(main,TweenInfo.new(.22,Enum.EasingStyle.Quint,Enum.EasingDirection.Out),{Size=UDim2.new(0.82,0,0.78,0)})
+        menuTween:Play()
+        if blurOn then TweenService:Create(blur,TweenInfo.new(.22),{Size=14}):Play() end
+    else
+        menuTween=TweenService:Create(main,TweenInfo.new(.16,Enum.EasingStyle.Quad,Enum.EasingDirection.In),{Size=UDim2.new(0.77,0,0.72,0)})
+        menuTween:Play()
+        if blurOn then TweenService:Create(blur,TweenInfo.new(.16),{Size=0}):Play() end
+        menuTween.Completed:Once(function() if not menuOpen then main.Visible=false end end)
+    end
 end
 close.MouseButton1Click:Connect(function() setMenu(false) end)
 UserInputService.InputBegan:Connect(function(input,processed)
