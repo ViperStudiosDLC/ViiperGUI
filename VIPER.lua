@@ -430,6 +430,142 @@ end)
 local playersPage=page("Players")
 local rosterPanel=makePanel(playersPage,"PLAYER SESSION ROSTER")
 makeLabel(rosterPanel,"A standard session list for your own experience. This does not reveal hidden players or track anyone through walls.",42,"mutedText")
+
+-- Local-only ESP-style markers for visible players in this experience.
+-- Depth testing and a raycast prevent markers from showing through walls.
+local markerPanel=makePanel(playersPage,"VISIBLE PLAYER MARKERS")
+makeLabel(markerPanel,"Local debug overlay for your own experience. Only players with a clear line of sight are marked; walls block the markers.",44,"mutedText")
+local markersEnabled=false
+local markerNames=true
+local markerDistances=true
+local markerFilter="Everyone"
+local playerBillboards={}
+local markerToggleButton
+local nameToggleButton
+local distanceToggleButton
+local filterButton
+
+local function clearPlayerMarkers()
+    for target,entry in pairs(playerBillboards) do
+        if entry.gui and entry.gui.Parent then entry.gui:Destroy() end
+        playerBillboards[target]=nil
+    end
+end
+
+local function markerPassesFilter(target)
+    if markerFilter=="Teammates" then
+        return player.Team~=nil and target.Team==player.Team
+    elseif markerFilter=="Opponents" then
+        return target.Team~=player.Team
+    end
+    return true
+end
+
+local function targetIsVisible(character,root)
+    local camera=workspace.CurrentCamera
+    if not camera or not character or not root then return false end
+    local origin=camera.CFrame.Position
+    local direction=root.Position-origin
+    local params=RaycastParams.new()
+    params.FilterType=Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances={player.Character}
+    local hit=workspace:Raycast(origin,direction,params)
+    return hit~=nil and hit.Instance:IsDescendantOf(character)
+end
+
+local function createPlayerMarker(target,root)
+    local billboard=Instance.new("BillboardGui")
+    billboard.Name="VIPER_VisiblePlayerMarker"
+    billboard.Adornee=root
+    billboard.Size=UDim2.fromOffset(210,34)
+    billboard.StudsOffset=Vector3.new(0,3.1,0)
+    billboard.AlwaysOnTop=false
+    billboard.MaxDistance=500
+    billboard.LightInfluence=0
+    billboard.Parent=playerGui
+
+    local label=Instance.new("TextLabel")
+    label.Name="MarkerText"
+    label.Size=UDim2.fromScale(1,1)
+    label.BackgroundColor3=Color3.fromRGB(12,14,22)
+    label.BackgroundTransparency=0.22
+    label.BorderSizePixel=0
+    label.Font=Enum.Font.GothamBold
+    label.TextSize=12
+    label.TextColor3=(target.Team and target.Team.TeamColor.Color) or theme().accent
+    label.TextStrokeTransparency=0.55
+    label.Text=""
+    label.Parent=billboard
+    local corner=Instance.new("UICorner")
+    corner.CornerRadius=UDim.new(0,7)
+    corner.Parent=label
+    local stroke=Instance.new("UIStroke")
+    stroke.Color=label.TextColor3
+    stroke.Transparency=0.25
+    stroke.Thickness=1
+    stroke.Parent=label
+    playerBillboards[target]={gui=billboard,label=label}
+end
+
+local function updatePlayerMarkers()
+    if not markersEnabled then
+        clearPlayerMarkers()
+        return
+    end
+    local camera=workspace.CurrentCamera
+    if not camera then return end
+    local alive={}
+    for _,target in ipairs(Players:GetPlayers()) do
+        if target~=player then
+            local character=target.Character
+            local root=character and character:FindFirstChild("HumanoidRootPart")
+            local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+            if root and humanoid and humanoid.Health>0 and markerPassesFilter(target) and targetIsVisible(character,root) then
+                alive[target]=true
+                local entry=playerBillboards[target]
+                if not entry or not entry.gui.Parent then
+                    createPlayerMarker(target,root)
+                    entry=playerBillboards[target]
+                end
+                entry.gui.Adornee=root
+                local parts={}
+                if markerNames then table.insert(parts,target.DisplayName) end
+                if markerDistances then
+                    local distance=(root.Position-camera.CFrame.Position).Magnitude
+                    table.insert(parts,math.floor(distance+0.5).." studs")
+                end
+                entry.label.Text=#parts>0 and table.concat(parts,"  •  ") or "PLAYER"
+                entry.label.TextColor3=(target.Team and target.Team.TeamColor.Color) or theme().accent
+            end
+        end
+    end
+    for target,entry in pairs(playerBillboards) do
+        if not alive[target] then
+            if entry.gui and entry.gui.Parent then entry.gui:Destroy() end
+            playerBillboards[target]=nil
+        end
+    end
+end
+
+markerToggleButton=button(markerPanel,"Visible-player ESP: OFF",function()
+    markersEnabled=not markersEnabled
+    markerToggleButton.Text="Visible-player ESP: "..(markersEnabled and "ON" or "OFF")
+    if not markersEnabled then clearPlayerMarkers() end
+end)
+nameToggleButton=button(markerPanel,"Player names: ON",function()
+    markerNames=not markerNames
+    nameToggleButton.Text="Player names: "..(markerNames and "ON" or "OFF")
+end)
+distanceToggleButton=button(markerPanel,"Distance labels: ON",function()
+    markerDistances=not markerDistances
+    distanceToggleButton.Text="Distance labels: "..(markerDistances and "ON" or "OFF")
+end)
+filterButton=button(markerPanel,"Team filter: Everyone",function()
+    if markerFilter=="Everyone" then markerFilter="Teammates"
+    elseif markerFilter=="Teammates" then markerFilter="Opponents"
+    else markerFilter="Everyone" end
+    filterButton.Text="Team filter: "..markerFilter
+end)
 local rosterRows={}
 local emptyRosterLabel=nil
 local function refreshRoster()
@@ -553,9 +689,13 @@ UserInputService.InputBegan:Connect(function(input,processed)
     end
 end)
 
-local frames,elapsed,snowClock=0,0,0
+local frames,elapsed,snowClock,markerClock=0,0,0,0
 RunService.RenderStepped:Connect(function(dt)
-    frames+=1; elapsed+=dt; snowClock+=dt
+    frames+=1; elapsed+=dt; snowClock+=dt; markerClock+=dt
+    if markerClock>=0.2 then
+        markerClock=0
+        updatePlayerMarkers()
+    end
     if elapsed>=.5 then
         local fps=math.floor(frames/elapsed+.5)
         fpsHud.Text="FPS  "..fps; fpsBig.Text="FPS  "..fps
