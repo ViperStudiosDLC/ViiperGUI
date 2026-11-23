@@ -8,9 +8,11 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
+local adminRemote = ReplicatedStorage:WaitForChild("VIPER_AdminRemote", 15)
 local old = playerGui:FindFirstChild("VIPER_GUI")
 if old then old:Destroy() end
 
@@ -281,6 +283,38 @@ button(crossSettings,"Cycle crosshair color",function() accent=accent==Color3.fr
 button(crossSettings,"Toggle crosshair",function() crosshairOn=not crosshairOn; crossGroup.Visible=crosshairOn and not menuOpen end)
 rebuildCrosshair()
 
+local movementPage=page("Movement")
+local movementPanel=makePanel(movementPage,"AUTHORIZED ADMIN MOVEMENT")
+makeLabel(movementPanel,"These controls work only when the server script authorizes your UserId.",34,"mutedText")
+local speedBox=tag(new("TextBox",{Size=UDim2.new(1,0,0,34),BackgroundColor3=theme().field,BorderSizePixel=0,Text="24",PlaceholderText="WalkSpeed (1-100)",TextColor3=theme().text,Font=Enum.Font.Gotham,TextSize=12,ClearTextOnFocus=false},movementPanel),"field")
+round(speedBox,8); outline(speedBox)
+local jumpBox=tag(new("TextBox",{Size=UDim2.new(1,0,0,34),BackgroundColor3=theme().field,BorderSizePixel=0,Text="60",PlaceholderText="JumpPower (1-150)",TextColor3=theme().text,Font=Enum.Font.Gotham,TextSize=12,ClearTextOnFocus=false},movementPanel),"field")
+round(jumpBox,8); outline(jumpBox)
+local function sendAdmin(action,value)
+    if adminRemote then adminRemote:FireServer(action,value) end
+end
+button(movementPanel,"Apply WalkSpeed",function() sendAdmin("SetSpeed",tonumber(speedBox.Text)) end)
+button(movementPanel,"Apply JumpPower",function() sendAdmin("SetJumpPower",tonumber(jumpBox.Text)) end)
+button(movementPanel,"Toggle Fly",function() sendAdmin("FlyToggle") end)
+button(movementPanel,"Toggle Noclip",function() sendAdmin("NoclipToggle") end)
+makeLabel(movementPanel,"Fly controls: WASD to move, Space to rise, LeftControl to descend.",34,"mutedText")
+local movementSendClock=0
+RunService.RenderStepped:Connect(function(dt)
+    movementSendClock+=dt
+    if movementSendClock>=0.08 then
+        movementSendClock=0
+        local move=Vector3.zero
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then move+=workspace.CurrentCamera.CFrame.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then move-=workspace.CurrentCamera.CFrame.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then move+=workspace.CurrentCamera.CFrame.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then move-=workspace.CurrentCamera.CFrame.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move+=Vector3.yAxis end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move-=Vector3.yAxis end
+        if move.Magnitude>1 then move=move.Unit end
+        if adminRemote then adminRemote:FireServer("FlyInput",move) end
+    end
+end)
+
 local debugPage=page("Debug")
 local debugPanel=makePanel(debugPage,"NPC DEBUG VISUALS")
 makeLabel(debugPanel,"Visual debugging for NPCs and test dummies in your own experience only.",34,"mutedText")
@@ -325,7 +359,7 @@ button(debugPanel,"Toggle NPC chams",function() npcChamsOn=not npcChamsOn; refre
 button(debugPanel,"Toggle NPC hitbox visualization",function() npcBoxesOn=not npcBoxesOn; refreshNpcVisuals() end)
 makeLabel(debugPanel,"These are debug overlays only; they do not change player hitboxes or expose other players through walls.",42,"mutedText")
 
-local tabs={"Home","Visuals","Crosshair","Appearance","Keybinds","Debug","Settings"}
+local tabs={"Home","Visuals","Crosshair","Appearance","Keybinds","Debug","Movement","Settings"}
 local function selectPage(name)
     for n,p in pairs(pages) do p.Visible=(n==name) end
     for n,b in pairs(nav) do b:SetAttribute("VIPERActive",n==name) end
