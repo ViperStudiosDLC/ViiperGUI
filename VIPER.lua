@@ -264,22 +264,6 @@ for _,name in ipairs({"Ocean","Fireplace","Snowfall"}) do
                     wallpaperStatus.Text = "Roblox could not load this asset. Use an approved image/decal asset ID permitted for this experience."
                 end
             end)
-                if ok then
-                    WALLPAPERS[name] = imageUri
-                    task.wait(0.75)
-                    if wallpaperPreview.IsLoaded or wallpaperBackground.IsLoaded then
-                        wallpaperStatus.Text = name .. " wallpaper applied to the VIPER background."
-                    else
-                        wallpaperPreview.Image = ""
-                        wallpaperBackground.Image = ""
-                        wallpaperStatus.Text = "Roblox could not load this image. Check its asset ID, permissions, and moderation status."
-                    end
-                else
-                    wallpaperPreview.Image = ""
-                    wallpaperBackground.Image = ""
-                    wallpaperStatus.Text = "Image failed to load: " .. tostring(err)
-                end
-            end)
         else
             wallpaperStatus.Text="Enter a numeric Roblox image asset ID."
         end
@@ -443,51 +427,50 @@ RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
-local debugPage=page("Debug")
-local debugPanel=makePanel(debugPage,"NPC DEBUG VISUALS")
-makeLabel(debugPanel,"Visual debugging for NPCs and test dummies in your own experience only.",34,"mutedText")
-local npcEspOn,npcChamsOn,npcBoxesOn=false,false,false
-local npcHighlights,npcBoxes={},{}
-local function isNpcModel(model)
-    if not model:IsA("Model") or not model:FindFirstChildOfClass("Humanoid") then return false end
-    return Players:GetPlayerFromCharacter(model)==nil
-end
-local function clearDebugVisuals()
-    for _,v in pairs(npcHighlights) do if v and v.Parent then v:Destroy() end end
-    for _,v in pairs(npcBoxes) do if v and v.Parent then v:Destroy() end end
-    table.clear(npcHighlights); table.clear(npcBoxes)
-end
-local function refreshNpcVisuals()
-    clearDebugVisuals()
-    if not (npcEspOn or npcChamsOn or npcBoxesOn) then return end
-    for _,model in ipairs(workspace:GetDescendants()) do
-        if isNpcModel(model) then
-            if npcEspOn or npcChamsOn then
-                local h=Instance.new("Highlight"); h.Name="VIPER_NPC_Debug"; h.Adornee=model
-                h.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop
-                h.FillColor=Color3.fromRGB(75,202,244); h.OutlineColor=Color3.fromRGB(235,245,255)
-                h.FillTransparency=npcChamsOn and 0.48 or 1; h.OutlineTransparency=npcEspOn and 0 or 1
-                h.Parent=gui; table.insert(npcHighlights,h)
-            end
-            if npcBoxesOn then
-                for _,part in ipairs(model:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        local box=Instance.new("BoxHandleAdornment"); box.Name="VIPER_NPC_HitboxView"
-                        box.Adornee=part; box.AlwaysOnTop=true; box.ZIndex=5; box.Size=part.Size
-                        box.Transparency=.72; box.Color3=Color3.fromRGB(255,185,75); box.Parent=gui
-                        table.insert(npcBoxes,box)
-                    end
-                end
-            end
-        end
+local playersPage=page("Players")
+local rosterPanel=makePanel(playersPage,"PLAYER SESSION ROSTER")
+makeLabel(rosterPanel,"A standard session list for your own experience. This does not reveal hidden players or track anyone through walls.",42,"mutedText")
+local rosterRows={}
+local function refreshRoster()
+    for _,row in pairs(rosterRows) do
+        if row and row.Parent then row:Destroy() end
+    end
+    table.clear(rosterRows)
+    local currentPlayers=Players:GetPlayers()
+    table.sort(currentPlayers,function(a,b) return a.Name:lower()<b.Name:lower() end)
+    for _,target in ipairs(currentPlayers) do
+        local character=target.Character
+        local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+        local healthText=humanoid and ("  •  HP "..math.floor(humanoid.Health).."/"..math.floor(humanoid.MaxHealth)) or "  •  Spawning"
+        local teamText=target.Team and target.Team.Name or "No team"
+        local row=tag(new("TextLabel",{
+            Size=UDim2.new(1,0,0,32),
+            BackgroundColor3=theme().field,
+            BorderSizePixel=0,
+            Text="  "..target.DisplayName.."  (@"..target.Name..")  •  "..teamText..healthText,
+            TextColor3=theme().text,
+            Font=Enum.Font.Gotham,
+            TextSize=11,
+            TextXAlignment=Enum.TextXAlignment.Left,
+            TextTruncate=Enum.TextTruncate.AtEnd,
+        },rosterPanel),"field")
+        round(row,8)
+        table.insert(rosterRows,row)
+    end
+    if #currentPlayers==0 then
+        makeLabel(rosterPanel,"No other players are currently in this server.",24,"mutedText")
     end
 end
-button(debugPanel,"Toggle NPC ESP outlines",function() npcEspOn=not npcEspOn; refreshNpcVisuals() end)
-button(debugPanel,"Toggle NPC chams",function() npcChamsOn=not npcChamsOn; refreshNpcVisuals() end)
-button(debugPanel,"Toggle NPC hitbox visualization",function() npcBoxesOn=not npcBoxesOn; refreshNpcVisuals() end)
-makeLabel(debugPanel,"These are debug overlays only; they do not change player hitboxes or expose other players through walls.",42,"mutedText")
+button(rosterPanel,"Refresh player list",refreshRoster)
+Players.PlayerAdded:Connect(function()
+    task.defer(refreshRoster)
+end)
+Players.PlayerRemoving:Connect(function()
+    task.defer(refreshRoster)
+end)
+task.defer(refreshRoster)
 
-local tabs={"Home","Visuals","Crosshair","Appearance","Keybinds","Debug","Movement","Settings"}
+local tabs={"Home","Visuals","Crosshair","Appearance","Keybinds","Players","Movement","Settings"}
 local function selectPage(name)
     for n,p in pairs(pages) do p.Visible=(n==name) end
     for n,b in pairs(nav) do b:SetAttribute("VIPERActive",n==name) end
