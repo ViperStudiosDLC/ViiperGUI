@@ -145,7 +145,7 @@ local function makeLabel(parent,txt,height,role,bold,size)
         TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true},parent),role or "text")
 end
 local function makePanel(parent,title)
-    local p=tag(new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundColor3=theme().panel,BorderSizePixel=0},parent),"panel")
+    local p=tag(new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundColor3=theme().panel,BackgroundTransparency=0.18,BorderSizePixel=0},parent),"panel")
     round(p,13); outline(p)
     new("UIPadding",{PaddingTop=UDim.new(0,13),PaddingBottom=UDim.new(0,13),PaddingLeft=UDim.new(0,15),PaddingRight=UDim.new(0,15)},p)
     new("UIListLayout",{Padding=UDim.new(0,8),SortOrder=Enum.SortOrder.LayoutOrder},p)
@@ -287,7 +287,7 @@ button(display,"Toggle background blur",function()
 end)
 button(display,"Reset visual settings",function()
     themeName="Dark"; accent=theme().accent; crosshairOn=true; fpsOn=true; blurOn=true; snowOn=false
-    crossGroup.Visible=not menuOpen; fpsHud.Visible=true; fpsBig.Visible=true; blur.Size=menuOpen and 14 or 0
+    crossGroup.Visible=crosshairOn; fpsHud.Visible=true; fpsBig.Visible=true; blur.Size=menuOpen and 14 or 0
     for _,part in ipairs(crossParts) do part.BackgroundColor3=accent end
     for _,name in ipairs({"VIPER_Bloom","VIPER_Color"}) do local e=Lighting:FindFirstChild(name); if e then e:Destroy() end end
     applyTheme()
@@ -431,11 +431,14 @@ local playersPage=page("Players")
 local rosterPanel=makePanel(playersPage,"PLAYER SESSION ROSTER")
 makeLabel(rosterPanel,"A standard session list for your own experience. This does not reveal hidden players or track anyone through walls.",42,"mutedText")
 local rosterRows={}
+local emptyRosterLabel=nil
 local function refreshRoster()
     for _,row in pairs(rosterRows) do
         if row and row.Parent then row:Destroy() end
     end
     table.clear(rosterRows)
+    if emptyRosterLabel and emptyRosterLabel.Parent then emptyRosterLabel:Destroy() end
+    emptyRosterLabel=nil
     local currentPlayers=Players:GetPlayers()
     table.sort(currentPlayers,function(a,b) return a.Name:lower()<b.Name:lower() end)
     for _,target in ipairs(currentPlayers) do
@@ -458,7 +461,7 @@ local function refreshRoster()
         table.insert(rosterRows,row)
     end
     if #currentPlayers==0 then
-        makeLabel(rosterPanel,"No other players are currently in this server.",24,"mutedText")
+        emptyRosterLabel=makeLabel(rosterPanel,"No players are currently in this server.",24,"mutedText")
     end
 end
 button(rosterPanel,"Refresh player list",refreshRoster)
