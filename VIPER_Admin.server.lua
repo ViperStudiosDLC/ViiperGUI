@@ -130,7 +130,9 @@ remote.OnServerEvent:Connect(function(player, action, value)
             local _, _, root = getCharacter(player)
             if root then
                 local velocity = root:FindFirstChild("VIPER_FlyVelocity")
-                if velocity then velocity.Velocity = value * 55 end
+                if velocity then
+                    velocity.Velocity = value * 55
+                end
                 local horizontal = Vector3.new(value.X, 0, value.Z)
                 local gyro = root:FindFirstChild("VIPER_FlyGyro")
                 if gyro and horizontal.Magnitude > 0.05 then
