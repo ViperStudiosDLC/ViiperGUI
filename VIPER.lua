@@ -85,6 +85,16 @@ local main = new("Frame", {
 }, gui)
 main.ClipsDescendants = true
 round(main,18)
+local wallpaperBackground = new("ImageLabel", {
+    Name = "VIPER_WallpaperBackground",
+    Position = UDim2.fromScale(0, 0),
+    Size = UDim2.fromScale(1, 1),
+    BackgroundTransparency = 1,
+    Image = "",
+    ImageTransparency = 0.18,
+    ScaleType = Enum.ScaleType.Crop,
+    ZIndex = 0,
+}, main)
 local mainConstraint = Instance.new("UISizeConstraint")
 mainConstraint.MinSize=Vector2.new(340,330); mainConstraint.MaxSize=Vector2.new(900,650); mainConstraint.Parent=main
 tag(main,"bg"); outline(main)
@@ -161,7 +171,15 @@ end
 -- FPS readout and crosshair: four separated arms with a center dot.
 local fpsHud = tag(new("TextLabel",{AnchorPoint=Vector2.new(1,0),Position=UDim2.new(1,-18,0,18),Size=UDim2.fromOffset(120,28),
     BackgroundTransparency=1,Text="FPS --",TextSize=14,Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Right,Visible=true},overlay),"accentText")
-local crossGroup = new("Frame",{Name="Crosshair",AnchorPoint=Vector2.new(0.5,0.5),Position=UDim2.fromScale(0.5,0.5),Size=UDim2.fromOffset(32,32),BackgroundTransparency=1,ZIndex=50},overlay)
+local crossGroup = new("Frame", {
+    Name = "Crosshair",
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(0.5, 0.5),
+    Size = UDim2.fromOffset(32, 32),
+    BackgroundTransparency = 1,
+    ZIndex = 50,
+    Visible = true,
+}, overlay)
 local crossParts={}
 local function crossPart(pos,size)
     local f=new("Frame",{AnchorPoint=Vector2.new(0.5,0.5),Position=pos,Size=size,BackgroundColor3=accent,BorderSizePixel=0,ZIndex=51},crossGroup)
@@ -222,21 +240,25 @@ for _,name in ipairs({"Ocean","Fireplace","Snowfall"}) do
             wallpaperStatus.Text="Loading "..name.." wallpaper..."
             wallpaperPreview.Image=""
             task.spawn(function()
-                local ok,err=pcall(function()
-                    ContentProvider:PreloadAsync({imageUri})
+                wallpaperPreview.Image = imageUri
+                wallpaperBackground.Image = imageUri
+                local ok, err = pcall(function()
+                    ContentProvider:PreloadAsync({wallpaperPreview, wallpaperBackground})
                 end)
                 if ok then
-                    WALLPAPERS[name]=imageUri
-                    wallpaperPreview.Image=imageUri
-                    wallpaperPreview.ImageTransparency=0
-                    task.wait(1)
-                    if wallpaperPreview.IsLoaded then
-                        wallpaperStatus.Text=name.." wallpaper loaded."
+                    WALLPAPERS[name] = imageUri
+                    task.wait(0.75)
+                    if wallpaperPreview.IsLoaded or wallpaperBackground.IsLoaded then
+                        wallpaperStatus.Text = name .. " wallpaper applied to the VIPER background."
                     else
-                        wallpaperStatus.Text="Roblox did not load this image. Check the asset ID, permissions, and moderation status."
+                        wallpaperPreview.Image = ""
+                        wallpaperBackground.Image = ""
+                        wallpaperStatus.Text = "Roblox could not load this image. Check its asset ID, permissions, and moderation status."
                     end
                 else
-                    wallpaperStatus.Text="Image failed to load: "..tostring(err)
+                    wallpaperPreview.Image = ""
+                    wallpaperBackground.Image = ""
+                    wallpaperStatus.Text = "Image failed to load: " .. tostring(err)
                 end
             end)
         else
@@ -244,7 +266,11 @@ for _,name in ipairs({"Ocean","Fireplace","Snowfall"}) do
         end
     end)
 end
-button(wallpaperPanel,"Clear wallpaper preview",function() wallpaperPreview.Image=""; wallpaperStatus.Text="Wallpaper preview cleared." end)
+button(wallpaperPanel,"Clear wallpaper",function()
+    wallpaperPreview.Image = ""
+    wallpaperBackground.Image = ""
+    wallpaperStatus.Text = "Wallpaper cleared."
+end)
 makeLabel(wallpaperPanel,"Upload each GIF/image to Roblox first, then paste its image asset ID above. GitHub raw URLs are not accepted by Roblox ImageLabels.",44,"mutedText")
 
 local settings=page("Settings")
@@ -278,23 +304,59 @@ for _,action in ipairs({"Menu","Crosshair","FPS","Blur"}) do
 end
 makeLabel(keyPanel,"Click a bind, then press the key you want to use.",20,"mutedText")
 
-local crosshairPage=page("Crosshair")
-local crossSettings=makePanel(crosshairPage,"CROSSHAIR CUSTOMIZATION")
-local crossSize,crossGap,crossThickness=32,7,2
+local crosshairPage = page("Crosshair")
+local crossSettings = makePanel(crosshairPage, "CROSSHAIR CUSTOMIZATION")
+local crossSize, crossGap, crossThickness = 32, 7, 2
+
+local previewHolder = new("Frame", {
+    Name = "CrosshairPreview",
+    Size = UDim2.new(1, 0, 0, 82),
+    BackgroundColor3 = theme().field,
+    BorderSizePixel = 0,
+    ClipsDescendants = true,
+}, crossSettings)
+round(previewHolder, 9)
+tag(previewHolder, "preview")
+local previewParts = {}
+
 local function rebuildCrosshair()
     crossGroup:ClearAllChildren()
     table.clear(crossParts)
-    local function piece(x,y,w,h)
-        local f=new("Frame",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromOffset(x,y),Size=UDim2.fromOffset(w,h),BackgroundColor3=accent,BorderSizePixel=0,ZIndex=51},crossGroup)
-        round(f,2)
-        table.insert(crossParts,f)
+    local function piece(parent, list, x, y, w, h, z)
+        local f = new("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromOffset(x, y),
+            Size = UDim2.fromOffset(w, h),
+            BackgroundColor3 = accent,
+            BorderSizePixel = 0,
+            ZIndex = z or 51,
+        }, parent)
+        round(f, 2)
+        table.insert(list, f)
     end
-    local center=crossSize/2
-    piece(center,center-crossGap-crossSize*.16,crossThickness,crossSize*.18)
-    piece(center,center+crossGap+crossSize*.16,crossThickness,crossSize*.18)
-    piece(center-crossGap-crossSize*.16,center,crossSize*.18,crossThickness)
-    piece(center+crossGap+crossSize*.16,center,crossSize*.18,crossThickness)
-    piece(center,center,math.max(3,crossThickness+1),math.max(3,crossThickness+1))
+
+    local center = crossSize / 2
+    local armLength = math.max(5, crossSize * 0.18)
+    local offset = crossGap + armLength / 2
+    piece(crossGroup, crossParts, center, center - offset, crossThickness, armLength)
+    piece(crossGroup, crossParts, center, center + offset, crossThickness, armLength)
+    piece(crossGroup, crossParts, center - offset, center, armLength, crossThickness)
+    piece(crossGroup, crossParts, center + offset, center, armLength, crossThickness)
+    piece(crossGroup, crossParts, center, center, math.max(3, crossThickness + 1), math.max(3, crossThickness + 1))
+
+    table.clear(previewParts)
+    previewHolder:ClearAllChildren()
+    local previewCenter = 41
+    local scale = 1.35
+    local previewGap = crossGap * scale
+    local previewArm = math.max(7, armLength * scale)
+    local previewThickness = math.max(2, crossThickness * scale)
+    local previewOffset = previewGap + previewArm / 2
+    piece(previewHolder, previewParts, previewCenter, previewCenter - previewOffset, previewThickness, previewArm, 2)
+    piece(previewHolder, previewParts, previewCenter, previewCenter + previewOffset, previewThickness, previewArm, 2)
+    piece(previewHolder, previewParts, previewCenter - previewOffset, previewCenter, previewArm, previewThickness, 2)
+    piece(previewHolder, previewParts, previewCenter + previewOffset, previewCenter, previewArm, previewThickness, 2)
+    piece(previewHolder, previewParts, previewCenter, previewCenter, previewThickness + 1, previewThickness + 1, 2)
 end
 button(crossSettings,"Increase crosshair size",function() crossSize=math.min(60,crossSize+4); crossGroup.Size=UDim2.fromOffset(crossSize,crossSize); rebuildCrosshair() end)
 button(crossSettings,"Decrease crosshair size",function() crossSize=math.max(16,crossSize-4); crossGroup.Size=UDim2.fromOffset(crossSize,crossSize); rebuildCrosshair() end)
@@ -341,7 +403,10 @@ RunService.RenderStepped:Connect(function(dt)
         if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move+=Vector3.yAxis end
         if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move-=Vector3.yAxis end
         if move.Magnitude>1 then move=move.Unit end
-        if adminRemote and move.Magnitude>0 then adminRemote:FireServer("FlyInput",move) end
+        -- Always send zero when no keys are held; otherwise the last fly velocity persists.
+        if adminRemote then
+            adminRemote:FireServer("FlyInput", move)
+        end
     end
 end)
 
