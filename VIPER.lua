@@ -99,7 +99,8 @@ local function applyTheme()
         if o and o.Parent then
             if r=="bg" then o.BackgroundColor3=t.bg
             elseif r=="panel" then o.BackgroundColor3=t.panel
-            elseif r=="field" or r=="fieldButton" then o.BackgroundColor3=t.field; o.TextColor3=t.text
+            elseif r=="field" or r=="fieldButton" then o.BackgroundColor3=t.field; if o:IsA("TextButton") or o:IsA("TextLabel") then o.TextColor3=t.text end
+            elseif r=="preview" then o.BackgroundColor3=t.field
             elseif r=="text" then o.TextColor3=t.text
             elseif r=="mutedText" then o.TextColor3=t.muted
             elseif r=="accentText" then o.TextColor3=accent
@@ -186,7 +187,7 @@ for _,name in ipairs({"Dark","Light","Midnight"}) do
 end
 local wallpaperPanel=makePanel(appearance,"WALLPAPER")
 local wallpaperPreview=new("ImageLabel",{Size=UDim2.new(1,0,0,104),BackgroundColor3=theme().field,BorderSizePixel=0,Image="",ScaleType=Enum.ScaleType.Crop},wallpaperPanel)
-round(wallpaperPreview,9); tag(wallpaperPreview,"field")
+round(wallpaperPreview,9); tag(wallpaperPreview,"preview")
 for _,name in ipairs({"Ocean","Fireplace","Snowfall"}) do
     button(wallpaperPanel,name.." wallpaper",function()
         wallpaperPreview.Image=WALLPAPERS[name]
@@ -220,7 +221,8 @@ local function bindLabel(action)
     return action.."  •  "..(key and key.Name or "Unassigned")
 end
 for _,action in ipairs({"Menu","Crosshair","FPS","Blur"}) do
-    local b=button(keyPanel,bindLabel(action),function()
+    local b
+    b=button(keyPanel,bindLabel(action),function()
         waitingForBind=action
         b.Text="Press a key for "..action.." (Esc cancels)"
     end)
