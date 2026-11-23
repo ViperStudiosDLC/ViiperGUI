@@ -109,7 +109,7 @@ local function applyTheme()
         if o and o.Parent then
             if r=="bg" then o.BackgroundColor3=t.bg
             elseif r=="panel" then o.BackgroundColor3=t.panel
-            elseif r=="field" or r=="fieldButton" then o.BackgroundColor3=t.field; if o:IsA("TextButton") or o:IsA("TextLabel") then o.TextColor3=t.text end
+            elseif r=="field" or r=="fieldButton" then o.BackgroundColor3=t.field; if o:IsA("TextButton") or o:IsA("TextLabel") or o:IsA("TextBox") then o.TextColor3=t.text end
             elseif r=="preview" then o.BackgroundColor3=t.field
             elseif r=="text" then o.TextColor3=t.text
             elseif r=="mutedText" then o.TextColor3=t.muted
@@ -179,7 +179,7 @@ local fpsBig=makeLabel(perf,"FPS  --",30,"accentText",true,24)
 local visuals=page("Visuals")
 local crossPanel=makePanel(visuals,"CROSSHAIR")
 makeLabel(crossPanel,"A clean, centered five-piece reticle.",20,"mutedText")
-button(crossPanel,"Toggle crosshair",function() crosshairOn=not crosshairOn; crossGroup.Visible=crosshairOn end)
+button(crossPanel,"Toggle crosshair",function() crosshairOn=not crosshairOn; crossGroup.Visible=crosshairOn and not menuOpen end)
 button(crossPanel,"Cycle crosshair color",function()
     accent = accent==Color3.fromRGB(75,202,244) and Color3.fromRGB(255,190,75) or Color3.fromRGB(75,202,244)
     applyTheme()
@@ -233,7 +233,7 @@ button(display,"Toggle background blur",function()
 end)
 button(display,"Reset visual settings",function()
     themeName="Dark"; accent=theme().accent; crosshairOn=true; fpsOn=true; blurOn=true; snowOn=false
-    crossGroup.Visible=true; fpsHud.Visible=true; fpsBig.Visible=true; blur.Size=menuOpen and 14 or 0
+    crossGroup.Visible=not menuOpen; fpsHud.Visible=true; fpsBig.Visible=true; blur.Size=menuOpen and 14 or 0
     for _,part in ipairs(crossParts) do part.BackgroundColor3=accent end
     for _,name in ipairs({"VIPER_Bloom","VIPER_Color"}) do local e=Lighting:FindFirstChild(name); if e then e:Destroy() end end
     applyTheme()
@@ -260,9 +260,11 @@ local crossSettings=makePanel(crosshairPage,"CROSSHAIR CUSTOMIZATION")
 local crossSize,crossGap,crossThickness=32,7,2
 local function rebuildCrosshair()
     crossGroup:ClearAllChildren()
+    table.clear(crossParts)
     local function piece(x,y,w,h)
         local f=new("Frame",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromOffset(x,y),Size=UDim2.fromOffset(w,h),BackgroundColor3=accent,BorderSizePixel=0,ZIndex=51},crossGroup)
         round(f,2)
+        table.insert(crossParts,f)
     end
     local center=crossSize/2
     piece(center,center-crossGap-crossSize*.16,crossThickness,crossSize*.18)
@@ -276,7 +278,7 @@ button(crossSettings,"Decrease crosshair size",function() crossSize=math.max(16,
 button(crossSettings,"Increase crosshair thickness",function() crossThickness=math.min(5,crossThickness+1); rebuildCrosshair() end)
 button(crossSettings,"Decrease crosshair thickness",function() crossThickness=math.max(1,crossThickness-1); rebuildCrosshair() end)
 button(crossSettings,"Cycle crosshair color",function() accent=accent==Color3.fromRGB(75,202,244) and Color3.fromRGB(255,190,75) or Color3.fromRGB(75,202,244); rebuildCrosshair(); applyTheme() end)
-button(crossSettings,"Toggle crosshair",function() crosshairOn=not crosshairOn; crossGroup.Visible=crosshairOn end)
+button(crossSettings,"Toggle crosshair",function() crosshairOn=not crosshairOn; crossGroup.Visible=crosshairOn and not menuOpen end)
 rebuildCrosshair()
 
 local debugPage=page("Debug")
@@ -323,7 +325,6 @@ button(debugPanel,"Toggle NPC chams",function() npcChamsOn=not npcChamsOn; refre
 button(debugPanel,"Toggle NPC hitbox visualization",function() npcBoxesOn=not npcBoxesOn; refreshNpcVisuals() end)
 makeLabel(debugPanel,"These are debug overlays only; they do not change player hitboxes or expose other players through walls.",42,"mutedText")
 
-table.insert(tabs or {},1,"")
 local tabs={"Home","Visuals","Crosshair","Appearance","Keybinds","Debug","Settings"}
 local function selectPage(name)
     for n,p in pairs(pages) do p.Visible=(n==name) end
@@ -364,6 +365,7 @@ end)
 local menuTween
 local function setMenu(open)
     menuOpen=open
+    crossGroup.Visible=crosshairOn and not open
     if menuTween then menuTween:Cancel() end
     if open then
         main.Visible=true
