@@ -125,6 +125,7 @@ local function applyTheme()
             elseif r=="panel" then o.BackgroundColor3=t.panel
             elseif r=="field" or r=="fieldButton" then o.BackgroundColor3=t.field; if o:IsA("TextButton") or o:IsA("TextLabel") or o:IsA("TextBox") then o.TextColor3=t.text end
             elseif r=="preview" then o.BackgroundColor3=t.field
+            elseif r=="accentFill" then o.BackgroundColor3=accent
             elseif r=="text" then o.TextColor3=t.text
             elseif r=="mutedText" then o.TextColor3=t.muted
             elseif r=="accentText" then o.TextColor3=accent
@@ -317,6 +318,13 @@ local previewHolder = new("Frame", {
 }, crossSettings)
 round(previewHolder, 9)
 tag(previewHolder, "preview")
+local previewCanvas = new("Frame", {
+    Name = "PreviewCanvas",
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(0.5, 0.5),
+    Size = UDim2.fromOffset(82, 82),
+    BackgroundTransparency = 1,
+}, previewHolder)
 local previewParts = {}
 
 local function rebuildCrosshair()
@@ -332,6 +340,7 @@ local function rebuildCrosshair()
             ZIndex = z or 51,
         }, parent)
         round(f, 2)
+        tag(f, "accentFill")
         table.insert(list, f)
     end
 
@@ -344,19 +353,23 @@ local function rebuildCrosshair()
     piece(crossGroup, crossParts, center + offset, center, armLength, crossThickness)
     piece(crossGroup, crossParts, center, center, math.max(3, crossThickness + 1), math.max(3, crossThickness + 1))
 
+    for _, oldPart in ipairs(previewParts) do
+        if oldPart and oldPart.Parent then
+            oldPart:Destroy()
+        end
+    end
     table.clear(previewParts)
-    previewHolder:ClearAllChildren()
     local previewCenter = 41
     local scale = 1.35
     local previewGap = crossGap * scale
     local previewArm = math.max(7, armLength * scale)
     local previewThickness = math.max(2, crossThickness * scale)
     local previewOffset = previewGap + previewArm / 2
-    piece(previewHolder, previewParts, previewCenter, previewCenter - previewOffset, previewThickness, previewArm, 2)
-    piece(previewHolder, previewParts, previewCenter, previewCenter + previewOffset, previewThickness, previewArm, 2)
-    piece(previewHolder, previewParts, previewCenter - previewOffset, previewCenter, previewArm, previewThickness, 2)
-    piece(previewHolder, previewParts, previewCenter + previewOffset, previewCenter, previewArm, previewThickness, 2)
-    piece(previewHolder, previewParts, previewCenter, previewCenter, previewThickness + 1, previewThickness + 1, 2)
+    piece(previewCanvas, previewParts, previewCenter, previewCenter - previewOffset, previewThickness, previewArm, 2)
+    piece(previewCanvas, previewParts, previewCenter, previewCenter + previewOffset, previewThickness, previewArm, 2)
+    piece(previewCanvas, previewParts, previewCenter - previewOffset, previewCenter, previewArm, previewThickness, 2)
+    piece(previewCanvas, previewParts, previewCenter + previewOffset, previewCenter, previewArm, previewThickness, 2)
+    piece(previewCanvas, previewParts, previewCenter, previewCenter, previewThickness + 1, previewThickness + 1, 2)
 end
 button(crossSettings,"Increase crosshair size",function() crossSize=math.min(60,crossSize+4); crossGroup.Size=UDim2.fromOffset(crossSize,crossSize); rebuildCrosshair() end)
 button(crossSettings,"Decrease crosshair size",function() crossSize=math.max(16,crossSize-4); crossGroup.Size=UDim2.fromOffset(crossSize,crossSize); rebuildCrosshair() end)
