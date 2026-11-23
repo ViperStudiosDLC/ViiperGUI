@@ -9,10 +9,12 @@ local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ContentProvider = game:GetService("ContentProvider")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
-local adminRemote = ReplicatedStorage:WaitForChild("VIPER_AdminRemote", 15)
+local adminRemote = ReplicatedStorage:WaitForChild("VIPER_AdminRemote", 30)
+local adminCheck = ReplicatedStorage:WaitForChild("VIPER_AdminCheck", 30)
 local old = playerGui:FindFirstChild("VIPER_GUI")
 if old then old:Destroy() end
 
@@ -205,25 +207,44 @@ local wallpaperPanel=makePanel(appearance,"WALLPAPER")
 local wallpaperPreview=new("ImageLabel",{Size=UDim2.new(1,0,0,118),BackgroundColor3=theme().field,BorderSizePixel=0,Image="",ScaleType=Enum.ScaleType.Crop},wallpaperPanel)
 round(wallpaperPreview,9); tag(wallpaperPreview,"preview")
 local wallpaperInputs={}
+local wallpaperStatus=makeLabel(wallpaperPanel,"Choose an uploaded Roblox image asset ID, then press Apply.",24,"mutedText")
 for _,name in ipairs({"Ocean","Fireplace","Snowfall"}) do
     makeLabel(wallpaperPanel,name.." asset ID",18,"mutedText",true,11)
     local input=tag(new("TextBox",{Size=UDim2.new(1,0,0,34),BackgroundColor3=theme().field,BorderSizePixel=0,
-        Text="",PlaceholderText="Paste Roblox image asset ID",PlaceholderColor3=theme().muted,
+        Text=(name=="Ocean" and "11542614607" or ""),PlaceholderText="Paste Roblox image asset ID",PlaceholderColor3=theme().muted,
         TextColor3=theme().text,Font=Enum.Font.Gotham,TextSize=12,ClearTextOnFocus=false},wallpaperPanel),"field")
     round(input,8); outline(input)
     wallpaperInputs[name]=input
     button(wallpaperPanel,"Apply "..name.." wallpaper",function()
         local raw=input.Text:gsub("%s",""):gsub("rbxassetid://","")
         if raw:match("^%d+$") and raw~="0" then
-            WALLPAPERS[name]="rbxassetid://"..raw
-            wallpaperPreview.Image=WALLPAPERS[name]
+            local imageUri="rbxassetid://"..raw
+            wallpaperStatus.Text="Loading "..name.." wallpaper..."
+            wallpaperPreview.Image=""
+            task.spawn(function()
+                local ok,err=pcall(function()
+                    ContentProvider:PreloadAsync({imageUri})
+                end)
+                if ok then
+                    WALLPAPERS[name]=imageUri
+                    wallpaperPreview.Image=imageUri
+                    wallpaperPreview.ImageTransparency=0
+                    task.wait(1)
+                    if wallpaperPreview.IsLoaded then
+                        wallpaperStatus.Text=name.." wallpaper loaded."
+                    else
+                        wallpaperStatus.Text="Roblox did not load this image. Check the asset ID, permissions, and moderation status."
+                    end
+                else
+                    wallpaperStatus.Text="Image failed to load: "..tostring(err)
+                end
+            end)
         else
-            input.Text=""
-            input.PlaceholderText="Enter a valid numeric Roblox image ID"
+            wallpaperStatus.Text="Enter a numeric Roblox image asset ID."
         end
     end)
 end
-button(wallpaperPanel,"Clear wallpaper preview",function() wallpaperPreview.Image="" end)
+button(wallpaperPanel,"Clear wallpaper preview",function() wallpaperPreview.Image=""; wallpaperStatus.Text="Wallpaper preview cleared." end)
 makeLabel(wallpaperPanel,"Upload each GIF/image to Roblox first, then paste its image asset ID above. GitHub raw URLs are not accepted by Roblox ImageLabels.",44,"mutedText")
 
 local settings=page("Settings")
@@ -285,13 +306,22 @@ rebuildCrosshair()
 
 local movementPage=page("Movement")
 local movementPanel=makePanel(movementPage,"AUTHORIZED ADMIN MOVEMENT")
-makeLabel(movementPanel,"These controls work only when the server script authorizes your UserId.",34,"mutedText")
+local movementStatus=makeLabel(movementPanel,"Checking server authorization...",28,"mutedText")
+task.spawn(function()
+    if adminCheck then
+        local ok,allowed=pcall(function() return adminCheck:InvokeServer() end)
+        movementStatus.Text=(ok and allowed) and "Admin access verified." or "Access denied. Add your UserId to the server allowlist or use the experience owner account."
+    else
+        movementStatus.Text="Server script not found. Install VIPER_Admin.server.lua in ServerScriptService."
+    end
+end)
 local speedBox=tag(new("TextBox",{Size=UDim2.new(1,0,0,34),BackgroundColor3=theme().field,BorderSizePixel=0,Text="24",PlaceholderText="WalkSpeed (1-100)",TextColor3=theme().text,Font=Enum.Font.Gotham,TextSize=12,ClearTextOnFocus=false},movementPanel),"field")
 round(speedBox,8); outline(speedBox)
 local jumpBox=tag(new("TextBox",{Size=UDim2.new(1,0,0,34),BackgroundColor3=theme().field,BorderSizePixel=0,Text="60",PlaceholderText="JumpPower (1-150)",TextColor3=theme().text,Font=Enum.Font.Gotham,TextSize=12,ClearTextOnFocus=false},movementPanel),"field")
 round(jumpBox,8); outline(jumpBox)
 local function sendAdmin(action,value)
-    if adminRemote then adminRemote:FireServer(action,value) end
+    if adminRemote then adminRemote:FireServer(action,value)
+    else movementStatus.Text="VIPER_AdminRemote missing. Install the server script in ServerScriptService." end
 end
 button(movementPanel,"Apply WalkSpeed",function() sendAdmin("SetSpeed",tonumber(speedBox.Text)) end)
 button(movementPanel,"Apply JumpPower",function() sendAdmin("SetJumpPower",tonumber(jumpBox.Text)) end)
@@ -311,7 +341,7 @@ RunService.RenderStepped:Connect(function(dt)
         if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move+=Vector3.yAxis end
         if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move-=Vector3.yAxis end
         if move.Magnitude>1 then move=move.Unit end
-        if adminRemote then adminRemote:FireServer("FlyInput",move) end
+        if adminRemote and move.Magnitude>0 then adminRemote:FireServer("FlyInput",move) end
     end
 end)
 
@@ -431,7 +461,7 @@ UserInputService.InputBegan:Connect(function(input,processed)
     for action,key in pairs(binds) do
         if input.KeyCode==key then
             if action=="Menu" then setMenu(not menuOpen)
-            elseif action=="Crosshair" then crosshairOn=not crosshairOn; crossGroup.Visible=crosshairOn
+            elseif action=="Crosshair" then crosshairOn=not crosshairOn; crossGroup.Visible=crosshairOn and not menuOpen
             elseif action=="FPS" then fpsOn=not fpsOn; fpsHud.Visible=fpsOn; fpsBig.Visible=fpsOn
             elseif action=="Blur" then blurOn=not blurOn; blur.Size=(menuOpen and blurOn) and 14 or 0 end
         end
@@ -447,7 +477,7 @@ RunService.RenderStepped:Connect(function(dt)
         frames=0; elapsed=0
     end
     for _,f in ipairs(flakes) do
-        f.Visible=snowOn
+        f.Visible=snowOn and not menuOpen
         if snowOn then
             local y=f.Position.Y.Scale+dt*.11
             local x=f.Position.X.Scale+math.sin(snowClock+f.AbsolutePosition.X/80)*dt*.018
