@@ -91,7 +91,7 @@ local wallpaperBackground = new("ImageLabel", {
     Size = UDim2.fromScale(1, 1),
     BackgroundTransparency = 1,
     Image = "",
-    ImageTransparency = 0.18,
+    ImageTransparency = 0.12,
     ScaleType = Enum.ScaleType.Crop,
     ZIndex = 0,
 }, main)
@@ -202,7 +202,7 @@ local fpsBig=makeLabel(perf,"FPS  --",30,"accentText",true,24)
 local visuals=page("Visuals")
 local crossPanel=makePanel(visuals,"CROSSHAIR")
 makeLabel(crossPanel,"A clean, centered five-piece reticle.",20,"mutedText")
-button(crossPanel,"Toggle crosshair",function() crosshairOn=not crosshairOn; crossGroup.Visible=crosshairOn and not menuOpen end)
+button(crossPanel,"Toggle crosshair",function() crosshairOn=not crosshairOn; crossGroup.Visible = crosshairOn end)
 button(crossPanel,"Cycle crosshair color",function()
     accent = accent==Color3.fromRGB(75,202,244) and Color3.fromRGB(255,190,75) or Color3.fromRGB(75,202,244)
     applyTheme()
@@ -238,14 +238,32 @@ for _,name in ipairs({"Ocean","Fireplace","Snowfall"}) do
         local raw=input.Text:gsub("%s",""):gsub("rbxassetid://","")
         if raw:match("^%d+$") and raw~="0" then
             local imageUri="rbxassetid://"..raw
-            wallpaperStatus.Text="Loading "..name.." wallpaper..."
-            wallpaperPreview.Image=""
+            wallpaperStatus.Text = "Loading " .. name .. " wallpaper..."
+            wallpaperPreview.Image = imageUri
+            wallpaperBackground.Image = imageUri
+            wallpaperPreview.ImageTransparency = 0
+            wallpaperBackground.ImageTransparency = 0.12
             task.spawn(function()
-                wallpaperPreview.Image = imageUri
-                wallpaperBackground.Image = imageUri
-                local ok, err = pcall(function()
-                    ContentProvider:PreloadAsync({wallpaperPreview, wallpaperBackground})
-                end)
+                -- Wait for Roblox's ImageLabel loader rather than passing the wrong
+                -- content type to ContentProvider:PreloadAsync.
+                local deadline = os.clock() + 8
+                while os.clock() < deadline do
+                    if wallpaperPreview.IsLoaded and wallpaperBackground.IsLoaded then
+                        WALLPAPERS[name] = imageUri
+                        wallpaperStatus.Text = name .. " wallpaper applied to the full VIPER window."
+                        return
+                    end
+                    task.wait(0.2)
+                end
+                if wallpaperPreview.IsLoaded or wallpaperBackground.IsLoaded then
+                    WALLPAPERS[name] = imageUri
+                    wallpaperStatus.Text = name .. " wallpaper loaded. Check permissions if the large background remains blank."
+                else
+                    wallpaperPreview.Image = ""
+                    wallpaperBackground.Image = ""
+                    wallpaperStatus.Text = "Roblox could not load this asset. Use an approved image/decal asset ID permitted for this experience."
+                end
+            end)
                 if ok then
                     WALLPAPERS[name] = imageUri
                     task.wait(0.75)
@@ -270,7 +288,9 @@ end
 button(wallpaperPanel,"Clear wallpaper",function()
     wallpaperPreview.Image = ""
     wallpaperBackground.Image = ""
-    wallpaperStatus.Text = "Wallpaper cleared."
+    wallpaperPreview.ImageTransparency = 0
+    wallpaperBackground.ImageTransparency = 1
+    wallpaperStatus.Text = "Wallpaper cleared. The selected theme background is visible again."
 end)
 makeLabel(wallpaperPanel,"Upload each GIF/image to Roblox first, then paste its image asset ID above. GitHub raw URLs are not accepted by Roblox ImageLabels.",44,"mutedText")
 
@@ -376,7 +396,7 @@ button(crossSettings,"Decrease crosshair size",function() crossSize=math.max(16,
 button(crossSettings,"Increase crosshair thickness",function() crossThickness=math.min(5,crossThickness+1); rebuildCrosshair() end)
 button(crossSettings,"Decrease crosshair thickness",function() crossThickness=math.max(1,crossThickness-1); rebuildCrosshair() end)
 button(crossSettings,"Cycle crosshair color",function() accent=accent==Color3.fromRGB(75,202,244) and Color3.fromRGB(255,190,75) or Color3.fromRGB(75,202,244); rebuildCrosshair(); applyTheme() end)
-button(crossSettings,"Toggle crosshair",function() crosshairOn=not crosshairOn; crossGroup.Visible=crosshairOn and not menuOpen end)
+button(crossSettings,"Toggle crosshair",function() crosshairOn=not crosshairOn; crossGroup.Visible = crosshairOn end)
 rebuildCrosshair()
 
 local movementPage=page("Movement")
@@ -507,7 +527,8 @@ end)
 local menuTween
 local function setMenu(open)
     menuOpen=open
-    crossGroup.Visible=crosshairOn and not open
+    -- Keep the reticle centered and visible over the menu as well.
+    crossGroup.Visible = crosshairOn
     if menuTween then menuTween:Cancel() end
     if open then
         main.Visible=true
@@ -539,7 +560,7 @@ UserInputService.InputBegan:Connect(function(input,processed)
     for action,key in pairs(binds) do
         if input.KeyCode==key then
             if action=="Menu" then setMenu(not menuOpen)
-            elseif action=="Crosshair" then crosshairOn=not crosshairOn; crossGroup.Visible=crosshairOn and not menuOpen
+            elseif action=="Crosshair" then crosshairOn=not crosshairOn; crossGroup.Visible = crosshairOn
             elseif action=="FPS" then fpsOn=not fpsOn; fpsHud.Visible=fpsOn; fpsBig.Visible=fpsOn
             elseif action=="Blur" then blurOn=not blurOn; blur.Size=(menuOpen and blurOn) and 14 or 0 end
         end
